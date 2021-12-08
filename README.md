@@ -10,7 +10,7 @@ macro_rules! mymacro {
     ($count:expr, $name:expr, fn $func:ident()) => {
         /// Returns `"$$ $name, ${stringify!($count)} to beam up"`.
         fn $func() -> &'static str {
-            "$$ $name, ${stringify!($count)} to beam up"
+            "$$ $name, $&count to beam up"
         }
     };
 }
