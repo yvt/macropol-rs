@@ -1,0 +1,20 @@
+[package]
+name = "macropol"
+version = "0.1.0"
+authors = ["yvt <i@yvt.jp>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "Ergonomic string literal interpolation in macro definitions"
+repository = "https://github.com/yvt/macropol-rs"
+
+[lib]
+proc-macro = true
+
+[features]
+nightly = []
+
+[dependencies]
+proc-macro2 = "1.0.0"
+syn = "1.0.56"
+quote = "1.0.0"
