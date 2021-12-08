@@ -6,9 +6,9 @@ Replaces metavariables (`$foo`) and arbitrary expressions in string literals (in
 #[macropol::macropol]
 macro_rules! mymacro {
     ($count:expr, $name:expr, fn $func:ident()) => {
-        /// Returns `"$name, ${stringify!($count)} to beam up"`.
+        /// Returns `"$$ $name, ${stringify!($count)} to beam up"`.
         fn $func() -> &'static str {
-            "$name, ${stringify!($count)} to beam up"
+            "$$ $name, ${stringify!($count)} to beam up"
         }
     };
 }
@@ -17,10 +17,10 @@ macro_rules! mymacro {
 //
 //     macro_rules! mymacro {
 //         ($count:expr, $name:expr, fn $func:ident()) => {
-//             #[doc = concat!("Returns `\"", $name, ", ",
+//             #[doc = concat!("Returns `\"$ ", $name, ", ",
 //                  stringify!($count), " to beam up\"`.")]
 //             fn func() -> &'static str {
-//                 concat!("", $name, ", ",
+//                 concat!("$ ", $name, ", ",
 //                     stringify!($count), " to beam up")
 //             }
 //         };
@@ -29,7 +29,7 @@ macro_rules! mymacro {
 
 mymacro!(3, "Scotty", fn func());
 
-assert_eq!(func(), "Scotty, 3 to beam up");
+assert_eq!(func(), "$ Scotty, 3 to beam up");
 ```
 
 ```rust
@@ -37,13 +37,13 @@ assert_eq!(func(), "Scotty, 3 to beam up");
 # #[cfg(feature = "nightly")] {
 #[macropol::macropol]
 macro mymacro($count:expr, $name:expr, fn $func:ident()) {
-    /// Returns `"$name, ${stringify!($count)} to beam up"`.
+    /// Returns `"$$ $name, ${stringify!($count)} to beam up"`.
     fn $func() -> &'static str {
-        "$name, ${stringify!($count)} to beam up"
+        "$$ $name, ${stringify!($count)} to beam up"
     }
 }
 
 mymacro!(3, "Scotty", fn func());
-assert_eq!(func(), "Scotty, 3 to beam up");
+assert_eq!(func(), "$ Scotty, 3 to beam up");
 # }
 ```
