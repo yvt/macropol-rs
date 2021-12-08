@@ -129,7 +129,11 @@ fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
         if !b.is_ascii_alphabetic() && b != b'_' {
             return Err(Error::new_spanned(
                 &lit_str,
-                "`$` must be followed by `{ ... }` or a valid identifier",
+                if should_stringify {
+                    "`$&` must be followed by `{ ... }` or a valid identifier"
+                } else {
+                    "`$` must be followed by `&`, `{ ... }`, or a valid identifier"
+                },
             ));
         }
 
