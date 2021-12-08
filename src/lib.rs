@@ -90,6 +90,14 @@ fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
             continue;
         }
 
+        // Should we `stringify!` the variable?
+        let should_stringify = if let Some(s) = input.strip_prefix("&") {
+            input = s;
+            true
+        } else {
+            false
+        };
+
         // `${ expression... }`
         if input.starts_with("{") {
             input = &input[1..];
@@ -97,7 +105,10 @@ fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
                 let expr = &input[..i];
                 input = &input[i + 1..];
                 match expr.parse() {
-                    Ok(tokens) => {
+                    Ok(mut tokens) => {
+                        if should_stringify {
+                            tokens = quote! { ::core::stringify!( # tokens ) };
+                        }
                         parts.push(Part::Tokens(tokens));
                     }
                     Err(e) => {
@@ -138,7 +149,14 @@ fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
                 ))
             }
         };
-        parts.push(Part::Tokens(quote! { $ #metavar_name }));
+
+        if should_stringify {
+            parts.push(Part::Tokens(
+                quote! { ::core::stringify!( $ #metavar_name ) },
+            ));
+        } else {
+            parts.push(Part::Tokens(quote! { $ #metavar_name }));
+        }
     }
 
     if parts.len() <= 1 {
