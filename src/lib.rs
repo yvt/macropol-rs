@@ -1,15 +1,41 @@
 #![doc = include_str!("./lib.md")]
-use proc_macro2::{Group, Ident, TokenStream, TokenTree};
+use darling::FromMeta;
+use proc_macro2::{Group, Ident, Span, TokenStream, TokenTree};
 use quote::{quote, ToTokens};
 use syn::Error;
 
+#[derive(Default, FromMeta)]
+struct Opts {
+    /// Specifiies the expression template used to concatenate strings. Defaults
+    /// to `::core::concat!($parts_comma_sep)` when unspecified.
+    #[darling(default)]
+    concat: Option<Tokens>,
+}
+
+/// Wraps `TokenStream` to implement `FromMeta`.
+struct Tokens(TokenStream);
+
+impl darling::FromMeta for Tokens {
+    fn from_string(value: &str) -> Result<Self, darling::Error> {
+        Ok(Self(syn::parse_str(value)?))
+    }
+}
+
 #[proc_macro_attribute]
 pub fn macropol(
-    _attr: proc_macro::TokenStream,
+    attr: proc_macro::TokenStream,
     item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
+    // Parse options
+    let opts = syn::parse_macro_input!(attr as syn::AttributeArgs);
+    let opts = match Opts::from_list(&opts) {
+        Ok(x) => x,
+        Err(e) => return TokenStream::from(e.write_errors()).into(),
+    };
+
+    // Process input
     let mut errors = Vec::new();
-    let out = transcribe(item.clone().into(), &mut errors).into();
+    let out = transcribe(item.clone().into(), &opts, &mut errors).into();
     if errors.is_empty() {
         out
     } else {
@@ -28,14 +54,14 @@ pub fn macropol(
     }
 }
 
-fn transcribe(s: TokenStream, collected_errors: &mut Vec<Error>) -> TokenStream {
+fn transcribe(s: TokenStream, opts: &Opts, collected_errors: &mut Vec<Error>) -> TokenStream {
     let mut out = Vec::new();
     for tt in s {
         match tt {
             TokenTree::Literal(lit) => {
                 // Transcribe if it's a string literal
                 if let Ok(s) = syn::parse2(quote! { #lit }) {
-                    match transcribe_lit_str(s) {
+                    match transcribe_lit_str(s, opts) {
                         Ok(x) => out.extend(x),
                         Err(e) => {
                             out.push(lit.into());
@@ -48,7 +74,11 @@ fn transcribe(s: TokenStream, collected_errors: &mut Vec<Error>) -> TokenStream 
             }
             TokenTree::Group(gr) => {
                 out.push(
-                    Group::new(gr.delimiter(), transcribe(gr.stream(), collected_errors)).into(),
+                    Group::new(
+                        gr.delimiter(),
+                        transcribe(gr.stream(), opts, collected_errors),
+                    )
+                    .into(),
                 );
             }
             _ => out.push(tt),
@@ -57,7 +87,7 @@ fn transcribe(s: TokenStream, collected_errors: &mut Vec<Error>) -> TokenStream 
     TokenStream::from_iter(out)
 }
 
-fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
+fn transcribe_lit_str(lit_str: syn::LitStr, opts: &Opts) -> Result<TokenStream, Error> {
     let input = lit_str.value();
     let mut input = &input[..];
     let mut parts = Vec::new();
@@ -168,10 +198,75 @@ fn transcribe_lit_str(lit_str: syn::LitStr) -> Result<TokenStream, Error> {
         return Ok(quote! { #lit_str });
     }
 
-    let parts = parts.into_iter().map(|p| match p {
-        Part::Input(s) => syn::LitStr::new(s, lit_str.span()).into_token_stream(),
-        Part::Tokens(v) => v,
-    });
+    let parts: Vec<_> = parts
+        .into_iter()
+        .map(|p| match p {
+            Part::Input(s) => syn::LitStr::new(s, lit_str.span()).into_token_stream(),
+            Part::Tokens(v) => v,
+        })
+        .collect();
 
-    Ok(quote! { ::core::concat!( #( #parts ),* ) })
+    if let Some(concat) = &opts.concat {
+        substitute_metavars(
+            concat.0.clone(),
+            &[("parts_comma_sep", &|| quote! { #( #parts ),* })],
+        )
+    } else {
+        Ok(quote! { ::core::concat!( #( #parts ),* ) })
+    }
+}
+
+/// Replace metavariables like `$parts` in the provided `TokenStream`.
+fn substitute_metavars(
+    s: TokenStream,
+    vars: &[(&str, &dyn Fn() -> TokenStream)],
+) -> Result<TokenStream, Error> {
+    let mut out = Vec::new();
+    let mut may_encounter_var = false;
+    for tt in s {
+        match tt {
+            TokenTree::Ident(ref ident) if may_encounter_var => {
+                may_encounter_var = false;
+                if let Some((_, subst)) = vars.iter().find(|(needle, _)| ident == needle) {
+                    // Found a metavariable (`$ident`); replace the tokens
+                    out.pop();
+                    out.extend(subst());
+                    continue;
+                } else {
+                    // Deny unknown metavariables so that adding new ones won't
+                    // break existing code
+                    return Err(Error::new(
+                        Span::call_site(),
+                        format_args!(
+                            "unknown metavariable in `concat` parameter value: `${}`",
+                            ident
+                        ),
+                    ));
+                }
+            }
+            TokenTree::Punct(ref p) if p.as_char() == '$' => {
+                if may_encounter_var {
+                    // `$$` → `$`
+                    may_encounter_var = false;
+                    continue;
+                } else {
+                    may_encounter_var = true;
+                }
+            }
+            TokenTree::Group(gr) => {
+                out.push(
+                    Group::new(gr.delimiter(), substitute_metavars(gr.stream(), vars)?).into(),
+                );
+                may_encounter_var = false;
+                continue;
+            }
+            _ => {
+                may_encounter_var = false;
+            }
+        }
+
+        // Output `tt` verbatim
+        out.push(tt);
+    }
+    Ok(TokenStream::from_iter(out))
 }

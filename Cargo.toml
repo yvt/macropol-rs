@@ -18,3 +18,7 @@ nightly = []
 proc-macro2 = "1.0.0"
 syn = "1.0.56"
 quote = "1.0.0"
+darling = "0.14.0"
+
+[dev-dependencies]
+unstringify = { version = "0.1.4" }
