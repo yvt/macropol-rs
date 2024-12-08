@@ -4,6 +4,16 @@ Ergonomic string literal interpolation in macro definitions.
 
 Replaces metavariables (`$foo`) and arbitrary expressions in string literals (including doc comments) and concatenates them with surrounding text fragments with `core::concat!`.
 
+## Syntax Overview
+
+| Syntax      | Output             | Notes                                  |
+| ----------- | ------------------ | -------------------------------------- |
+| `"$foo"`    | `$foo`             | `$foo` must expand to a string literal |
+| `"$&foo"`   | `stringify!($foo)` |                                        |
+| `"${bar}"`  | `bar`              | `bar` must expand to a string literal  |
+
+## Example
+
 ```rust
 #[macropol::macropol]
 macro_rules! mymacro {
