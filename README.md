@@ -7,10 +7,10 @@ Replaces metavariables (`$foo`) and arbitrary expressions in string literals (in
 ```rust
 #[macropol::macropol]
 macro_rules! mymacro {
-    ($count:expr, $name:expr, fn $func:ident()) => {
-        /// Returns `"$$ $name, ${stringify!($count)} to beam up"`.
+    ($count:expr, $name:literal, fn $func:ident()) => {
+        /// Returns `"$$ $name, $&count to beam up"`.
         fn $func() -> &'static str {
-            "$$ $name, $&count to beam up"
+            "$$ $name, ${stringify!($count)} to beam up"
         }
     };
 }
